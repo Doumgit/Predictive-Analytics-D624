@@ -1,0 +1,236 @@
+---
+title: "Data Preprocessing/Overfitting"
+author: "Souleymane Doumbia"
+date: "`r Sys.Date()`"
+output:
+  html_document: 
+    toc: true
+    toc_float: true
+    toc_depth: 3
+  pdf_document:
+    toc: true
+    toc_depth: '3'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Load necessary libraries
+library(mlbench)
+library(ggplot2)
+library(GGally)
+library(dplyr)
+```
+
+## Exercise 3.1: Exploring the Glass Dataset
+### (a) Using visualizations to explore the predictor variables
+```{r, message=FALSE, warning=FALSE}
+# Load the Glass data
+data(Glass)
+Glass <- Glass
+
+# Basic structure of the dataset
+str(Glass)
+
+# Plotting pairwise relationships between predictors
+# And excluding the Type variable as it's the target variable
+ggpairs(Glass[, -10]) + theme_bw()
+
+# Univariate plots for individual predictors
+Glass_long <- reshape2::melt(Glass[, -10])
+ggplot(Glass_long, aes(value)) + 
+  geom_histogram(bins = 30, fill = "skyblue", color = "black") + 
+  facet_wrap(~variable, scales = "free") + 
+  theme_bw() + 
+  labs(title = "Distribution of Predictor Variables")
+
+```
+The visualizations of the predictor variables show the distributions and relationships between the nine predictors. From the univariate plots, several variables appear to follow relatively normal distributions, though some variables like \textit{Mg}, \textit{K}, \textit{Ba}, and \textit{Fe} display significant skewness, with most values concentrated towards the lower end.
+
+The pair plot (scatter plot matrix) provides an overview of the relationships between these predictors. For example:
+- \textit{Refractive Index (RI)} shows a slight negative correlation with \textit{Na}, \textit{Mg}, \textit{Al}, \textit{Si}, and \textit{Ca}.
+- The variable \textit{Ba} exhibits a positive correlation with \textit{K} and \textit{Ca}, which might indicate a link between these elements in certain types of glass.
+
+
+### (b) Identifying outliers and skewness
+```{r, message=FALSE, warning=FALSE}
+# Boxplots to identify outliers
+ggplot(Glass_long, aes(x = variable, y = value)) + 
+  geom_boxplot(fill = "lightgreen") + 
+  theme_bw() + 
+  labs(title = "Boxplots of Predictor Variables")
+
+# Checking skewness for each predictor
+library(e1071)
+skewness_values <- apply(Glass[, -10], 2, skewness)
+skewness_values
+```
+\textbf{Outliers}: Based on the boxplots, there are notable outliers in variables such as \textit{Na}, \textit{Mg}, \textit{K}, \textit{Ca}, and \textit{Ba}. The distribution of these variables shows some extreme values that might represent specific glass types or experimental errors.
+
+\textbf{Skewness}: Variables like \textit{Mg}, \textit{K}, \textit{Ba}, and \textit{Fe} are particularly skewed. For example:
+- \textit{Mg} is negatively skewed with a large number of data points clustered at the high end (around 3.5–4.5) and very few observations in the lower range.
+- \textit{K}, \textit{Ba}, and \textit{Fe} are positively skewed, with most values concentrated near zero and some extreme outliers at the higher end.
+
+The presence of skewness suggests that transformations might be needed to improve the predictive modeling.
+
+
+### (c) Transformations
+```{r, message=FALSE, warning=FALSE}
+# Loading necessary library
+library(caret)
+
+# Pre-process the Glass data using the 'spatialSign' method
+preProc <- preProcess(Glass[, -10], method = "spatialSign")
+
+# Applying the transformation to the dataset
+Glass_transformed_ss <- predict(preProc, Glass[, -10])
+
+# Viewing the transformed data
+head(Glass_transformed_ss)
+
+# Plotting distributions after spatialSign transformation
+Glass_long_ss <- reshape2::melt(Glass_transformed_ss)
+ggplot(Glass_long_ss, aes(value)) + 
+  geom_histogram(bins = 30, fill = "lightblue", color = "black") + 
+  facet_wrap(~variable, scales = "free") + 
+  theme_bw() + 
+  labs(title = "Distributions After SpatialSign Transformation")
+```
+The \textit{spatialSign} transformation was applied to all predictors because it normalizes multivariate data, mitigating the effect of outliers and skewed distributions. Given that several predictors, such as \textit{Mg}, \textit{K}, \textit{Ba}, and \textit{Fe}, show significant skewness, this transformation helps ensure that all variables are on a comparable scale, which can improve the performance of classification models by making the data more robust and consistent.
+
+
+## Exercise 3.2: Soybean Dataset Analysis
+### (a) Investigating Frequency Distributions
+```{r, message=FALSE, warning=FALSE}
+# Load the Soybean dataset
+data(Soybean)
+
+# Summary of the dataset structure
+str(Soybean)
+
+# Investigate frequency distributions for categorical variables
+# Using lapply to check the frequency of levels for each categorical predictor
+freq_distributions <- lapply(Soybean, table)
+freq_distributions
+
+# Check for degenerate distributions (those with most values in a single category)
+degenerate_vars <- sapply(Soybean, function(x) max(table(x)) / length(x))
+degenerate_vars
+```
+
+#### Breakdown of Variables and Frequency Distributions:
+
+* **$shriveling:**
+  - 0: 539 occurrences
+  - 1: 38 occurrences
+  - Proportion of dominant category (0): $\frac{539}{683} \approx 0.79$
+  - Not degenerate, but highly skewed towards 0.
+
+* **$roots:**
+  - 0: 551 occurrences
+  - 1: 86 occurrences
+  - 2: 15 occurrences
+  - Proportion of dominant category (0): $\frac{551}{683} \approx 0.81$
+  - Not degenerate, but skewed.
+
+* **$seed:**
+  - 0: 476 occurrences
+  - 1: 115 occurrences
+  - Proportion of dominant category (0): $\frac{476}{683} \approx 0.70$
+  - Not degenerate, but skewed.
+
+* **$mold.growth:**
+  - 0: 524 occurrences
+  - 1: 67 occurrences
+  - Proportion of dominant category (0): $\frac{524}{683} \approx 0.77$
+  - Not degenerate, but skewed.
+
+* **$mycelium:**
+  - 0: 639 occurrences
+  - 1: 6 occurrences
+  - Proportion of dominant category (0): $\frac{639}{683} \approx 0.94$
+  - **Degenerate variable** (since the proportion exceeds 90%).
+
+* **$int.discolor:**
+  - 0: 581 occurrences
+  - 1: 44 occurrences
+  - 2: 20 occurrences
+  - Proportion of dominant category (0): $\frac{581}{683} \approx 0.85$
+  - Not degenerate, but highly skewed.
+
+* **$sclerotia:**
+  - 0: 625 occurrences
+  - 1: 20 occurrences
+  - Proportion of dominant category (0): $\frac{625}{683} \approx 0.91$
+  - **Degenerate variable** (exceeds 90%).
+
+#### Summary of Degenerate Variables:
+* **$mycelium:** 93.6% of values are in category 0.
+* **$sclerotia:** 91.5% of values are in category 0.
+
+- These two variables are degenerate, as more than 90% of their values fall into a single category.
+
+- Other variables like $shriveling, $roots, and $mold.growth show skewness but are not considered degenerate by the 90% threshold.
+
+
+
+### (b) Investigating Missing Data
+```{r, message=FALSE, warning=FALSE}
+# Investigating missing data
+missing_data_summary <- colSums(is.na(Soybean))
+missing_data_summary
+
+# Visualizing missing data pattern
+library(VIM)
+aggr_plot <- aggr(Soybean, col = c('navyblue', 'red'), numbers = TRUE, sortVars = TRUE, labels = names(Soybean), cex.axis = .7, gap = 3, ylab = c("Missing data", "Pattern"))
+
+# Checking if missing data is related to class
+missing_by_class <- Soybean %>%
+  group_by(Class) %>%
+  summarise_all(~sum(is.na(.))) 
+missing_by_class
+```
+#### Missing Data Observations:
+- The variables with the highest proportions of missing values are *hail*, *seed.tmt*, *sever*, and *germ*, each with approximately 17.7% missing data.
+- Variables such as *lodging*, *leaf.mild*, and *fruiting.bodies* also have over 15% of their data missing.
+- The distribution of missing data across various variables shows some patterns, as visualized in the plots, where some variables exhibit clusters of missingness in the dataset.
+
+#### Pattern of Missing Data:
+- The heatmap of the missing data pattern indicates that certain combinations of variables have missing data together, which might point to systematic missingness related to specific conditions.
+
+
+### (c) Handling Missing Data
+```{r, message=FALSE, warning=FALSE}
+# Loading necessary libraries
+library(caret)
+library(dplyr)
+
+# Separating numeric and categorical variables
+numericVars <- Soybean[, sapply(Soybean, is.numeric)]
+categoricalVars <- Soybean[, sapply(Soybean, is.factor)]
+
+# Imputation: numeric variables using median impute
+preProcNumeric <- preProcess(numericVars, method = "medianImpute")
+numeric_imputed <- predict(preProcNumeric, numericVars)
+
+# Mode imputation for categorical variables
+mode_impute <- function(x) {
+  x[is.na(x)] <- names(which.max(table(x)))
+  return(x)
+}
+categorical_imputed <- categoricalVars %>% mutate_all(mode_impute)
+
+# Combining the imputed datasets
+Soybean_imputed <- cbind(numeric_imputed, categorical_imputed)
+
+# Checking the dataset after imputation
+print("Number of missing data in Soybean after imputation:"); sum(is.na(Soybean_imputed))
+```
+
+- For handling missing data in the Soybean dataset, we applied imputation techniques to both numerical and categorical variables.
+- **Numerical Variables**: We used median imputation to replace missing values, as it is less sensitive to outliers and ensures that the central tendency of the data is preserved.
+- **Categorical Variables**: Mode imputation was applied, replacing missing values with the most frequent category, ensuring that the distribution of the categorical variables remains representative.
+- After imputation, no missing values remain in the dataset, as confirmed by a final check which returned zero missing entries. This ensures the dataset is complete for subsequent analysis.
+
+
+- - -
