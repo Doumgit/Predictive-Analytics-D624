@@ -1,0 +1,374 @@
+---
+title: "Data_624 Wk2 Time Series"
+author: "Souleymane Doumbia"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+  pdf_document:
+    toc: true
+    toc_depth: '3'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Libraries
+```{r loading_libraries}
+library(fpp3)
+library(USgas) # for Exercise 2.4
+```
+
+## Exercise 2.1
+### Exploring the datasets using help()
+#### aus_production
+```{r overview_aus_production}
+help(aus_production)
+head(aus_production)
+```
+#### pelt
+```{r overview_pelt}
+#help(pelt)
+head(pelt)
+```
+#### gafa_stock
+```{r overview_gafa_stock}
+help(gafa_stock)
+head(gafa_stock)
+```
+#### vic_elec
+```{r overview_vic_elec}
+help(vic_elec)
+head(vic_elec)
+```
+
+### Inspecting the time interval of each series 
+
+By inspecting the first rows of each dataset above, The Time Interval for each of them is:
+
+- *Bricks from aus_production*: Quarter
+
+- *Lynx from pelt*: Year
+
+- *Close from gafa_stock*: Day
+
+- *Demand from vic_elec*: Half hour (30 minutes)
+
+### Plotting time series using autoplot()
+
+```{r Plotting_time_series_using_autoplot()}
+# Time plot for Bricks from aus_production
+autoplot(aus_production, Bricks) +
+  labs(title = "Bricks Production over Time (Quarterly)", 
+       y = "Bricks Produced", 
+       x = "Year")
+
+# Time plot for Lynx from pelt
+autoplot(pelt, Lynx) +
+  labs(title = "Lynx Population over Time (Yearly)", 
+       y = "Number of Lynx", 
+       x = "Year")
+
+# Time plot for Close from gafa_stock
+autoplot(gafa_stock, Close) +
+  labs(title = "GAFA Stock Closing Prices", 
+       y = "Closing Price", 
+       x = "Date") +
+  scale_x_date(date_labels = "%Y-%m-%d", 
+               date_breaks = "1 year")
+
+# Time plot for Demand from vic_elec
+autoplot(vic_elec, Demand) +
+  labs(title = "Electricity Demand in Victoria (Half-Hourly)", 
+       y = "Demand (MW)", 
+       x = "Date and Time") +
+  scale_x_datetime(date_labels = "%Y-%m-%d %H:%M", 
+                   date_breaks = "60 day") +
+  theme(axis.text.x = element_text(angle = 45, 
+                                   hjust = 1))
+
+```
+
+## Exercise 2.2
+### Identifying the peak closing prices for each stock
+```{r unique_stock_symbol_peak_closing_price}
+peak_closing_prices <- gafa_stock %>%
+  as_tibble() %>%  # Convert the data to a regular tibble to avoid grouping issues
+  group_by(Symbol) %>%
+  summarise(Peak_Close = max(Close, na.rm = TRUE)) 
+
+peak_closing_prices
+```
+
+### Finding the day corresponding to the peak closing price for each stock
+```{r peak_closing_price_day}
+peak_days <- gafa_stock %>%
+  as_tibble() %>%  
+  inner_join(peak_closing_prices, by = "Symbol") %>%
+  filter(Close == Peak_Close)
+
+peak_days %>%
+ select(Date, Symbol, Close)
+```
+
+## Exercise 2.3: File tute1.csv
+### Reading the data into R
+```{r Reading_the_data}
+tute1 <- readr::read_csv("tute1.csv")
+#View(tute1)
+```
+### Converting the data to time series
+```{r Converting_data_to_Time_Series}
+mytimeseries <- tute1 |>
+  mutate(Quarter = yearquarter(Quarter)) |>
+  as_tsibble(index = Quarter)
+```
+
+### Constructing time series plots of each of the three series
+```{r Constructing_time_series}
+mytimeseries |>
+  pivot_longer(-Quarter) |>
+  ggplot(aes(x = Quarter, y = value, colour = name)) +
+  geom_line() +
+  facet_grid(name ~ ., scales = "free_y")
+```
+
+
+## Exercise 2.4:
+### Creating a tsibble from **us_total**
+```{r us_total_as_tsibble}
+us_total_tsibble <- us_total %>%
+  as_tsibble(key = state, index = year)
+
+glimpse(us_total_tsibble)
+```
+### Filtering data for the New England states (Maine, Vermont, New Hampshire, Massachusetts, Connecticut and Rhode Island)
+```{r NewEngland_States}
+new_england_states <- c("Maine", "Vermont", "New Hampshire", "Massachusetts", "Connecticut", "Rhode Island")
+
+new_england_data <- us_total_tsibble %>%
+  filter(state %in% new_england_states)
+```
+
+### Plotting the annual natural gas consumption by state (New England States)
+```{r new_england_states_time_series_gas_consumption}
+ggplot(new_england_data, aes(x = year, y = y, colour = state)) +
+  geom_line() +
+  labs(title = "Annual Natural Gas Consumption in New England",
+       x = "Year",
+       y = "Gas Consumption (Billion Cubic Feet)",
+       colour = "State") +
+  theme_minimal() +
+  facet_grid(state ~ ., scales = "free_y")
+```
+
+
+## Exercise 2.5:
+### Reading the **tourism.xlsx** file
+```{r loading_tourism_data}
+tourism_data <- readxl::read_excel("tourism.xlsx")
+
+head(tourism_data)
+```
+
+### Creating a tsibble
+```{r Creating_tsibble}
+tourism_tsibble <- tourism_data %>%
+  mutate(Quarter = yearquarter(Quarter)) %>%  
+  as_tsibble(index = Quarter, key = c(Region, State, Purpose))
+
+glimpse(tourism_tsibble)
+```
+### Find the combination of Region and Purpose with the maximum average number of overnight trips
+```{r region_purpose_maximum_avg_of_overnight_trip}
+max_avg_trips <- tourism_tsibble %>%
+  group_by(Region, Purpose) %>%
+  summarise(avg_trips = mean(Trips, na.rm = TRUE)) %>%
+  arrange(desc(avg_trips)) %>%
+  slice(1)  # Get the row with the maximum average trips
+
+max_avg_trips
+```
+### Creating a new tsibble with total trips by State
+```{r total_trips_by_State_new_tsibble}
+state_total_trips <- tourism_tsibble %>%
+  group_by(State) %>%  
+  summarise(total_trips = sum(Trips, na.rm = TRUE)) %>%  
+  ungroup() %>%  # Removing grouping
+  as_tsibble(index = Quarter, key = State)  
+
+state_total_trips
+```
+
+## Exercise 2.8:
+### Loading and Subsetting the datasets
+```{r Loading_and_Subsetting}
+us_employment <- us_employment
+aus_production <- aus_production
+pelt <- pelt
+PBS <- PBS
+us_gasoline <- us_gasoline
+
+total_private <- us_employment %>% filter(Title == "Total Private")
+h02 <- PBS %>% filter(ATC2 == "H02")
+barrels <- us_gasoline
+```
+
+### Total Private Employed (us_employment):
+```{r Total_Private}
+# Plot the series to spot trends, seasonality, and cyclicity
+autoplot(total_private, Employed) + 
+  labs(title = "Total Private Employment in the US")
+
+# Seasonality
+gg_season(total_private, Employed)
+
+# Subseries plot for seasonal patterns
+gg_subseries(total_private, Employed)
+
+# Lag plot to check for autocorrelation
+gg_lag(total_private, Employed)
+
+# Autocorrelation function plot
+ACF(total_private, Employed) %>% autoplot()
+
+```
+#### Seasonality, Cyclicity, and Trend:
+
+- *Trend*: There is a clear upward trend in employment from 1940 to 2020.
+
+- *Seasonality*: Strong seasonality is evident, with employment spiking in certain months each year.
+
+- *Cyclicality*: Small dips occur during economic downturns (e.g., the 2008 recession).
+
+#### What do you learn about the series?
+
+The series shows consistent growth in private employment over time, with predictable seasonal fluctuations.
+
+#### Seasonal Patterns:
+
+Employment increases during certain months (likely holiday seasons or business quarters), showing stable seasonal effects.
+
+#### Unusual Years:
+
+The dip around 2008 (due to the financial crisis) stands out, but overall, the series shows steady growth.
+
+
+### Bricks (aus_production)
+```{r Bricks}
+# Plot the Bricks production series
+autoplot(aus_production, Bricks) + 
+  labs(title = "Bricks Production in Australia")
+
+# Seasonality
+gg_season(aus_production, Bricks)
+
+# Subseries plot for seasonal patterns
+gg_subseries(aus_production, Bricks)
+
+# Lag plot to explore autocorrelation
+gg_lag(aus_production, Bricks)
+
+# Autocorrelation function
+ACF(aus_production, Bricks) %>% autoplot()
+```
+#### Seasonality, Cyclicity, and Trend:
+
+- *Trend*: There is a clear upward trend in brick production from the 1960s to the 1980s, followed by a steady decline toward the 2000s.
+
+- *Seasonality*: There is evidence of moderate seasonality, with regular fluctuations in brick production, especially in the subseries plots, showing consistent quarterly variations.
+
+- *Cyclicality*: The series displays some cyclicality, particularly with the long-term rise and fall of brick production over multiple decades.
+
+#### What do you learn about the series?:
+
+Brick production in Australia increased significantly from the 1960s to the early 1980s, likely reflecting construction booms during that time. After the 1980s, production started to decline, suggesting a downturn in demand or economic activity.
+
+#### Seasonal Patterns:
+The subseries plots and lag plots show moderate seasonality, with slightly higher production in certain quarters. However, the seasonality is not as pronounced as in some other datasets.
+
+#### Unusual Years:
+The peak in production in the late 1970s and early 1980s stands out as an unusual period, followed by a significant decline afterward. This could indicate a construction boom followed by a market slowdown.
+
+### Hare Pelts (pelt)
+```{r Hare}
+# Plot the Hare series
+autoplot(pelt, Hare) + 
+  labs(title = "Hare Pelts in Canada")
+
+# Seasonality
+#gg_season(pelt, Hare)
+
+# Subseries plot for seasonal patterns
+gg_subseries(pelt, Hare)
+
+# Lag plot
+gg_lag(pelt, Hare)
+
+# Autocorrelation function
+ACF(pelt, Hare) %>% autoplot()
+```
+
+#### Seasonality, Cyclicity, and Trend:
+
+- *Trend*: The series shows a cyclical pattern with no clear long-term trend. There are significant rises and falls in the number of hare pelts.
+
+- *Seasonality*: No strong seasonality is observed in the time series. The lag plots and autocorrelation function (ACF) suggest cyclical patterns but not regular seasonal spikes.
+
+- *Cyclicality*: There are prominent cyclic patterns with large peaks and troughs recurring roughly every 10-15 years, indicating cycles in the hare population, likely influenced by ecological factors (e.g., predator-prey dynamics).
+
+#### What do you learn about the series?:
+
+The hare pelt production follows a regular cyclical pattern, with sharp increases and decreases over the years. This could be due to natural population cycles driven by ecological factors.
+
+#### Seasonal Patterns:
+The dataset does not exhibit strong seasonal behavior. The variation appears to be driven more by longer-term cyclical factors rather than predictable seasonal effects.
+
+#### Unusual Years:
+Peaks around the late 1800s and early 1900s stand out as periods of unusually high hare pelt production, followed by sharp declines. These could be linked to specific environmental or economic factors affecting the hare population.
+
+
+### H02 Cost (PBS)
+```{r H02}
+# Plot the H02 Cost series
+autoplot(h02, Cost) + 
+  labs(title = "H02 Costs in the PBS Dataset")
+
+# Seasonality
+gg_season(h02, Cost)
+
+# Subseries plot for seasonal patterns
+gg_subseries(h02, Cost)
+
+# Lag plot
+#gg_lag(h02, Cost)
+
+# Autocorrelation function
+ACF(h02, Cost) %>% autoplot()
+
+```
+
+### Barrels (us_gasoline)
+```{r Barrels}
+# Plot the Barrels series
+autoplot(barrels, Barrels) + 
+  labs(title = "Barrels of Gasoline Consumed in the US")
+
+# Seasonality
+gg_season(barrels, Barrels)
+
+# Subseries plot for seasonal patterns
+gg_subseries(barrels, Barrels)
+
+# Lag plot
+gg_lag(barrels, Barrels)
+
+# Autocorrelation function
+ACF(barrels, Barrels) %>% autoplot()
+
+```
+
+- - -
